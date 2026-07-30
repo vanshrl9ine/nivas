@@ -189,6 +189,15 @@ public class PropertyQueryBuilder {
             filters.add(bedroomFilter(request.bedrooms()));
         }
 
+        if (request.publishedAfter() != null) {
+            filters.add(Query.of(q -> q.range(r -> r.date(d -> d
+                    .field("publishedAt")
+                    // Strictly greater than: the boundary listing was already
+                    // included in the previous alert, and users notice duplicates
+                    // far more than they notice a gap.
+                    .gt(request.publishedAfter().toString())))));
+        }
+
         // AND semantics: one filter clause per amenity. A single terms query would
         // mean "has any of these", which is not what a user ticking three boxes wants.
         if (notEmpty(request.amenities())) {

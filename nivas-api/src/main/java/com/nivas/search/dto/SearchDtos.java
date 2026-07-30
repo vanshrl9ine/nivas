@@ -53,6 +53,13 @@ public final class SearchDtos {
 
             Boolean verifiedOnly,
 
+            /**
+             * Only listings published at or after this instant. Not exposed as a
+             * user-facing filter — it is what lets a saved-search alert ask
+             * "what is new since I last told this user about it?".
+             */
+            Instant publishedAfter,
+
             // Point-radius search. All three are required together.
             @Min(-90) @Max(90) Double lat,
             @Min(-180) @Max(180) Double lon,

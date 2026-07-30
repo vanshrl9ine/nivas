@@ -33,6 +33,7 @@ public final class SearchRequestBuilder {
     private List<Furnishing> furnishing;
     private List<Amenity> amenities;
     private Boolean verifiedOnly;
+    private java.time.Instant publishedAfter;
     private Double lat;
     private Double lon;
     private Double radiusKm;
@@ -89,6 +90,11 @@ public final class SearchRequestBuilder {
         return this;
     }
 
+    public SearchRequestBuilder publishedAfter(java.time.Instant value) {
+        this.publishedAfter = value;
+        return this;
+    }
+
     public SearchRequestBuilder point(double lat, double lon, double radiusKm) {
         this.lat = lat;
         this.lon = lon;
@@ -113,7 +119,7 @@ public final class SearchRequestBuilder {
     public SearchRequest build() {
         return new SearchRequest(q, city, localitySlugs, listingType, propertyTypes,
                 minPrice, maxPrice, bedrooms, minAreaSqft, maxAreaSqft, furnishing, amenities,
-                verifiedOnly, lat, lon, radiusKm,
+                verifiedOnly, publishedAfter, lat, lon, radiusKm,
                 topLeftLat, topLeftLon, bottomRightLat, bottomRightLon,
                 sort, page, size);
     }

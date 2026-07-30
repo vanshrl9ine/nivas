@@ -54,6 +54,12 @@ operation in the product. Incrementing a counter column per view would put a row
 lock on the most popular listings. Views accumulate in Redis and a scheduled job
 folds them back in batches.
 
+**Alerts remember what they already said.** A saved search stores the search
+request verbatim as `jsonb`, so replaying it runs the exact query the user built.
+Each carries a watermark — the instant it last notified — and the next run asks
+only for listings published after it. Without that, every tick re-sends the same
+listings, which is how a product gets marked as spam.
+
 ## Running it
 
 Requires JDK 21 and Docker.
@@ -117,6 +123,8 @@ Docker daemon is present, so `./mvnw test` still works anywhere.
 | `PATCH` | `/api/v1/properties/{id}/status` | Publish / sold / rented |
 | `POST` | `/api/v1/properties/{id}/leads` | Anonymous, rate limited, idempotent |
 | `GET` | `/api/v1/leads` | The owner's enquiry inbox |
+| `GET` | `/api/v1/saved-searches` | Stored filters, each with a new-match count |
+| `POST` | `/api/v1/saved-searches` | Saves criteria; optional alerting |
 | `POST` | `/api/v1/admin/index/rebuild` | Rebuilds the index from Postgres |
 
 A search combining most of it:
