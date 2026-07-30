@@ -11,6 +11,7 @@ import java.util.UUID;
 import com.nivas.catalog.domain.Amenity;
 import com.nivas.catalog.domain.Furnishing;
 import com.nivas.catalog.domain.ListingType;
+import com.nivas.catalog.domain.Locality;
 import com.nivas.catalog.domain.Property;
 import com.nivas.catalog.domain.PropertyImage;
 import com.nivas.catalog.domain.PropertyStatus;
@@ -83,7 +84,25 @@ public final class PropertyDtos {
         }
     }
 
-    public record LocalityResponse(UUID id, String slug, String name, String city, String state) {
+    /**
+     * Includes the centroid so a client can centre a map, or prefill a new
+     * listing's coordinates from the locality the owner picked — without which
+     * every listing would need the owner to know its latitude.
+     */
+    public record LocalityResponse(
+            UUID id,
+            String slug,
+            String name,
+            String city,
+            String state,
+            Double latitude,
+            Double longitude) {
+
+        public static LocalityResponse from(Locality locality) {
+            return new LocalityResponse(locality.getId(), locality.getSlug(), locality.getName(),
+                    locality.getCity(), locality.getState(),
+                    locality.getLatitude(), locality.getLongitude());
+        }
     }
 
     public record OwnerResponse(UUID id, String fullName, String phone) {
@@ -141,13 +160,9 @@ public final class PropertyDtos {
             Instant updatedAt) implements Serializable {
 
         public static PropertyDetailResponse from(Property property) {
-            var locality = property.getLocality() == null ? null
-                    : new LocalityResponse(
-                            property.getLocality().getId(),
-                            property.getLocality().getSlug(),
-                            property.getLocality().getName(),
-                            property.getLocality().getCity(),
-                            property.getLocality().getState());
+            var locality = property.getLocality() == null
+                    ? null
+                    : LocalityResponse.from(property.getLocality());
 
             // Contact details are intentionally part of the public payload for a
             // listing: reaching the owner is the point of the product. Email is

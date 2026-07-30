@@ -62,7 +62,6 @@ public class LocalityController {
     }
 
     private static LocalityResponse toResponse(Locality locality) {
-        return new LocalityResponse(locality.getId(), locality.getSlug(), locality.getName(),
-                locality.getCity(), locality.getState());
+        return LocalityResponse.from(locality);
     }
 }
