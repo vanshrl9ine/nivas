@@ -1,0 +1,95 @@
+{
+  "dynamic": "strict",
+  "properties": {
+    "id": { "type": "keyword" },
+    "ownerId": { "type": "keyword" },
+
+    "title": {
+      "type": "text",
+      "analyzer": "nivas_text",
+      "search_analyzer": "nivas_text_search",
+      "fields": {
+        "autocomplete": {
+          "type": "text",
+          "analyzer": "nivas_autocomplete_index",
+          "search_analyzer": "nivas_autocomplete_search"
+        },
+        "raw": { "type": "keyword", "ignore_above": 256 }
+      }
+    },
+    "description": {
+      "type": "text",
+      "analyzer": "nivas_text",
+      "search_analyzer": "nivas_text_search"
+    },
+
+    "listingType": { "type": "keyword" },
+    "propertyType": { "type": "keyword" },
+    "status": { "type": "keyword" },
+    "furnishing": { "type": "keyword" },
+    "amenities": { "type": "keyword" },
+
+    "bedrooms": { "type": "short" },
+    "bathrooms": { "type": "short" },
+    "balconies": { "type": "short" },
+    "floorNumber": { "type": "short" },
+    "totalFloors": { "type": "short" },
+    "ageYears": { "type": "short" },
+    "carpetAreaSqft": { "type": "integer" },
+    "builtUpAreaSqft": { "type": "integer" },
+
+    "price": { "type": "scaled_float", "scaling_factor": 100 },
+    "pricePerSqft": { "type": "scaled_float", "scaling_factor": 100 },
+    "maintenanceMonthly": { "type": "scaled_float", "scaling_factor": 100 },
+    "priceNegotiable": { "type": "boolean" },
+
+    "localityId": { "type": "keyword" },
+    "localitySlug": { "type": "keyword" },
+    "localityName": {
+      "type": "keyword",
+      "fields": {
+        "text": {
+          "type": "text",
+          "analyzer": "nivas_text",
+          "search_analyzer": "nivas_text_search"
+        },
+        "autocomplete": {
+          "type": "text",
+          "analyzer": "nivas_autocomplete_index",
+          "search_analyzer": "nivas_autocomplete_search"
+        }
+      }
+    },
+    "city": {
+      "type": "keyword",
+      "normalizer": "nivas_keyword_lowercase",
+      "fields": {
+        "text": { "type": "text", "analyzer": "nivas_text" }
+      }
+    },
+    "state": { "type": "keyword", "normalizer": "nivas_keyword_lowercase" },
+    "pincode": { "type": "keyword" },
+    "addressLine": { "type": "text", "analyzer": "nivas_text", "index": true },
+    "location": { "type": "geo_point" },
+
+    "verified": { "type": "boolean" },
+    "viewCount": { "type": "long" },
+    "imageCount": { "type": "integer" },
+    "coverImageUrl": { "type": "keyword", "index": false, "doc_values": false },
+
+    "availableFrom": { "type": "date", "format": "date" },
+    "publishedAt": { "type": "date", "format": "date_optional_time||epoch_millis" },
+    "updatedAt": { "type": "date", "format": "date_optional_time||epoch_millis" },
+
+    "suggest": {
+      "type": "completion",
+      "analyzer": "nivas_autocomplete_search",
+      "preserve_separators": true,
+      "preserve_position_increments": true,
+      "max_input_length": 60,
+      "contexts": [
+        { "name": "city", "type": "category", "path": "city" }
+      ]
+    }
+  }
+}

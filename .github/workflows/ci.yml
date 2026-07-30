@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A new push supersedes an in-flight run on the same ref.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Testcontainers reuse is a local developer convenience; on a fresh CI runner
+  # it only adds noise to the logs.
+  TESTCONTAINERS_REUSE_ENABLE: "false"
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      # Elasticsearch will not start under the default limit.
+      - name: Raise vm.max_map_count for Elasticsearch
+        run: sudo sysctl -w vm.max_map_count=262144
+
+      - name: Compile
+        working-directory: nivas-api
+        run: ./mvnw -B -ntp -DskipTests compile
+
+      - name: Unit tests
+        working-directory: nivas-api
+        run: ./mvnw -B -ntp test
+
+      # Runs the *IT classes against real Postgres, Redis, Elasticsearch and
+      # Kafka containers. The runner has Docker, so nothing is skipped here.
+      - name: Integration tests
+        working-directory: nivas-api
+        run: ./mvnw -B -ntp verify
+
+      - name: Package
+        working-directory: nivas-api
+        run: ./mvnw -B -ntp -DskipTests package
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            nivas-api/target/surefire-reports/
+            nivas-api/target/failsafe-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: nivas-api-jar
+          path: nivas-api/target/*.jar
+          retention-days: 7
+
+  compose:
+    name: Validate compose stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Catches malformed YAML, unknown keys and bad interpolation before anyone
+      # discovers them halfway through a `compose up`.
+      - name: Validate docker-compose.yml
+        run: docker compose -f infra/docker-compose.yml config --quiet
+
+      - name: Validate observability profile resolves
+        run: |
+          docker compose -f infra/docker-compose.yml --profile observability --profile tools \
+            config --quiet

@@ -1,0 +1,161 @@
+# Local development stack for Nivas.
+#
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# Everything binds to localhost only. Credentials here are development
+# defaults and are deliberately committed — never reuse them anywhere real.
+
+name: nivas
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: nivas-postgres
+    environment:
+      POSTGRES_DB: nivas
+      POSTGRES_USER: nivas
+      POSTGRES_PASSWORD: nivas
+      # Deterministic collation so index ordering matches across machines.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US --encoding=UTF8"
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nivas -d nivas"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: nivas-redis
+    # appendonly keeps rate-limit / refresh-token state across restarts,
+    # which makes local debugging far less confusing.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ES_VERSION:-9.1.0}
+    container_name: nivas-elasticsearch
+    environment:
+      discovery.type: single-node
+      # Security off locally: it keeps the dev loop to a single curl and no
+      # certs. Production config lives in the deployment repo, not here.
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+      # Stops ES from flipping indices to read-only on a full-ish dev laptop.
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ES_VERSION:-9.1.0}
+    container_name: nivas-kibana
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "127.0.0.1:5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    profiles: ["tools"]
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: nivas-kafka
+    # KRaft mode — single node acting as both broker and controller. No ZooKeeper.
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "127.0.0.1:29092:29092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: nivas-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      # Lets Prometheus scrape the API when it runs on the host via `mvn spring-boot:run`.
+      - "host.docker.internal:host-gateway"
+    profiles: ["observability"]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: nivas-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    profiles: ["observability"]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  elasticsearch-data:
+  kafka-data:
+  prometheus-data:
+  grafana-data:

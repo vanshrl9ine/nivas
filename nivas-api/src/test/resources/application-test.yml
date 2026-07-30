@@ -1,0 +1,49 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    # Deliberately the same migrations as production, not a test-only schema.
+    # A schema that only exists in tests proves nothing about the real one.
+    clean-disabled: false
+
+  kafka:
+    consumer:
+      auto-offset-reset: earliest
+      # A fresh group per run so a rerun re-reads from the beginning rather than
+      # resuming committed offsets from the previous one.
+      group-id: nivas-indexer-test
+
+nivas:
+  jwt:
+    secret: integration-test-secret-long-enough-for-hs256-0123456789
+    issuer: nivas-test
+    access-token-ttl: 15m
+    refresh-token-ttl: 1d
+  cache:
+    property-detail-ttl: 10m
+    search-results-ttl: 30s
+    locality-ttl: 1h
+  rate-limit:
+    search:
+      permits: 5
+      window: 10s
+    lead:
+      permits: 3
+      window: 10s
+  search:
+    max-page-size: 100
+    default-page-size: 20
+  outbox:
+    # Faster than production so tests do not spend most of their time waiting
+    # for the relay to tick.
+    poll-interval: 200
+  analytics:
+    view-flush-interval: 500
+
+logging:
+  level:
+    com.nivas: DEBUG
+    org.testcontainers: INFO
+    com.github.dockerjava: WARN

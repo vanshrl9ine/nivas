@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+  external_labels:
+    env: local
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: nivas-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # host.docker.internal covers `./mvnw spring-boot:run` on the host.
+      # Add "nivas-api:8080" here once the API itself runs in compose.
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          application: nivas-api

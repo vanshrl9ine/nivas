@@ -1,0 +1,163 @@
+spring:
+  application:
+    name: nivas-api
+
+  threads:
+    virtual:
+      # Request handling is IO-bound (Postgres, Redis, Elasticsearch) and every
+      # call is blocking, which is exactly the shape virtual threads are for.
+      enabled: true
+
+  datasource:
+    url: ${NIVAS_DB_URL:jdbc:postgresql://localhost:5432/nivas}
+    username: ${NIVAS_DB_USER:nivas}
+    password: ${NIVAS_DB_PASSWORD:nivas}
+    hikari:
+      pool-name: nivas-cp
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 10s
+
+  jpa:
+    # Off deliberately: lazy loading in the view layer hides N+1 queries and
+    # holds a connection for the whole request. Repositories fetch what they need.
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema. Hibernate only checks that it agrees.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+        query.in_clause_parameter_padding: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  data:
+    redis:
+      host: ${NIVAS_REDIS_HOST:localhost}
+      port: ${NIVAS_REDIS_PORT:6379}
+      timeout: 2s
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+    elasticsearch:
+      repositories:
+        enabled: true
+
+  elasticsearch:
+    uris: ${NIVAS_ES_URIS:http://localhost:9200}
+    connection-timeout: 5s
+    socket-timeout: 10s
+
+  kafka:
+    bootstrap-servers: ${NIVAS_KAFKA_SERVERS:localhost:29092}
+    producer:
+      # Durability over throughput: an unpublished outbox event means a listing
+      # silently missing from search.
+      acks: all
+      retries: 5
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: nivas-indexer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 2
+
+  jackson:
+    default-property-inclusion: non_null
+    datatype:
+      datetime:
+        # Dates go on the wire as ISO-8601, not epoch numbers. In Jackson 3 this
+        # lives under DateTimeFeature; it was on SerializationFeature in Jackson 2,
+        # and putting it there now fails binding at startup.
+        write-dates-as-timestamps: false
+
+server:
+  port: ${NIVAS_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,caches
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+nivas:
+  jwt:
+    # Dev-only default. Override in every real environment.
+    # Must be >= 32 bytes for HS256.
+    secret: ${NIVAS_JWT_SECRET:dev-only-insecure-secret-change-me-0123456789abcdef}
+    issuer: nivas
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+  cache:
+    property-detail-ttl: 10m
+    search-results-ttl: 60s
+    locality-ttl: 6h
+  rate-limit:
+    # Sliding-window limits, enforced in Redis so they hold across instances.
+    search:
+      permits: 60
+      window: 1m
+    lead:
+      permits: 5
+      window: 1h
+  search:
+    # The index name itself lives in PropertyDocument.INDEX_NAME — annotations
+    # need a compile-time constant.
+    max-page-size: 100
+    default-page-size: 20
+
+logging:
+  level:
+    com.nivas: DEBUG
+    org.springframework.data.elasticsearch.client.WIRE: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: false
+logging:
+  level:
+    com.nivas: INFO
+management:
+  tracing:
+    sampling:
+      probability: 0.1

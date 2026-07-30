@@ -1,0 +1,87 @@
+{
+  "number_of_shards": 1,
+  "number_of_replicas": 0,
+  "refresh_interval": "1s",
+  "max_ngram_diff": 20,
+  "analysis": {
+    "filter": {
+      "nivas_autocomplete_ngram": {
+        "type": "edge_ngram",
+        "min_gram": 2,
+        "max_gram": 20
+      },
+      "nivas_english_stemmer": {
+        "type": "stemmer",
+        "language": "light_english"
+      },
+      "nivas_english_stop": {
+        "type": "stop",
+        "stopwords": "_english_"
+      },
+      "nivas_synonyms": {
+        "type": "synonym_graph",
+        "lenient": true,
+        "synonyms": [
+          "flat, apartment, appartment",
+          "bhk, bedroom hall kitchen",
+          "villa, bungalow",
+          "independent house, individual house",
+          "society, complex, gated community",
+          "car park, parking, car parking",
+          "gym, gymnasium, fitness centre, fitness center",
+          "pool, swimming pool",
+          "furnished, furnishing"
+        ]
+      }
+    },
+    "analyzer": {
+      "nivas_text": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding",
+          "nivas_english_stop",
+          "nivas_english_stemmer"
+        ]
+      },
+      "nivas_text_search": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding",
+          "nivas_synonyms",
+          "nivas_english_stop",
+          "nivas_english_stemmer"
+        ]
+      },
+      "nivas_autocomplete_index": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding",
+          "nivas_autocomplete_ngram"
+        ]
+      },
+      "nivas_autocomplete_search": {
+        "type": "custom",
+        "tokenizer": "standard",
+        "filter": [
+          "lowercase",
+          "asciifolding"
+        ]
+      }
+    },
+    "normalizer": {
+      "nivas_keyword_lowercase": {
+        "type": "custom",
+        "filter": [
+          "lowercase",
+          "asciifolding"
+        ]
+      }
+    }
+  }
+}
