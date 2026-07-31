@@ -25,7 +25,31 @@ public record NivasProperties(
         @Valid @NotNull Jwt jwt,
         @Valid @NotNull Cache cache,
         @Valid @NotNull RateLimit rateLimit,
-        @Valid @NotNull Search search) {
+        @Valid @NotNull Search search,
+        @Valid @NotNull Payments payments) {
+
+    public record Payments(
+            /** Which gateway bean is active: {@code mock} or {@code razorpay}. */
+            @NotBlank String gateway,
+
+            /**
+             * HMAC secret the provider signs webhook bodies with. Without a
+             * correct one the webhook endpoint would be an unauthenticated
+             * "grant me a package" API, so it is validated for length rather
+             * than merely being present.
+             */
+            @NotBlank @Size(min = 16, message = "Webhook secret must be at least 16 characters")
+            String webhookSecret,
+
+            /** Provider API key id. Unused by the mock gateway. */
+            String keyId,
+
+            /** Provider API secret. Never logged, never returned by any endpoint. */
+            String keySecret,
+
+            /** How long an unpaid order holds its slots before being swept. */
+            @NotNull Duration orderTtl) {
+    }
 
     public record Jwt(
             /* HS256 needs >= 256 bits of key material; anything shorter is rejected by JJWT anyway. */

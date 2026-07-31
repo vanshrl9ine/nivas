@@ -31,6 +31,8 @@ public class SecurityConfig {
             "/api/v1/properties/**",
             "/api/v1/search/**",
             "/api/v1/localities/**",
+            "/api/v1/packages",
+            "/api/v1/home/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"
@@ -65,6 +67,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, PUBLIC_GET).permitAll()
                         // Anonymous enquiries are allowed; the endpoint is rate limited instead.
                         .requestMatchers(HttpMethod.POST, "/api/v1/properties/*/leads").permitAll()
+                        /*
+                         * The payment webhook cannot carry a bearer token — the
+                         * gateway has no session. It authenticates by HMAC
+                         * signature over the raw body instead, which is verified
+                         * in OrderService before anything is fulfilled.
+                         */
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhook").permitAll()
                         // Liveness/readiness and the metrics scrape are unauthenticated
                         // because the load balancer and Prometheus cannot hold a token.
                         // In production the management endpoints belong on a separate

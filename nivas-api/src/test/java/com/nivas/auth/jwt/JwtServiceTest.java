@@ -31,7 +31,9 @@ class JwtServiceTest {
                         new NivasProperties.RateLimit.Rule(60, Duration.ofMinutes(1)),
                         new NivasProperties.RateLimit.Rule(5, Duration.ofHours(1)),
                         new NivasProperties.RateLimit.Rule(300, Duration.ofMinutes(1))),
-                new NivasProperties.Search(100, 20));
+                new NivasProperties.Search(100, 20),
+                new NivasProperties.Payments("mock", "unit-test-webhook-secret", null, null,
+                        Duration.ofMinutes(30)));
     }
 
     @BeforeEach

@@ -65,6 +65,9 @@ public interface PropertyRepository extends JpaRepository<Property, UUID> {
 
     long countByOwnerId(UUID ownerId);
 
+    /** Drives the plan quota: what is live now, not what was ever created. */
+    long countByOwnerIdAndStatus(UUID ownerId, PropertyStatus status);
+
     /** Same reasoning as {@link #findByIdWithDetail}: to-one only, collections batched. */
     @EntityGraph(attributePaths = { "owner", "locality" })
     List<Property> findByIdIn(List<UUID> ids);

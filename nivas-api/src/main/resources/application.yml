@@ -155,6 +155,17 @@ nivas:
     # need a compile-time constant.
     max-page-size: 100
     default-page-size: 20
+  payments:
+    # mock runs the whole purchase flow locally with no provider account and no
+    # money. Signatures are still real HMAC, so the verification path is the
+    # same one production uses. Switch to `razorpay` and supply real keys for
+    # anything else.
+    gateway: ${NIVAS_PAYMENT_GATEWAY:mock}
+    webhook-secret: ${NIVAS_WEBHOOK_SECRET:dev-only-webhook-secret-change-me}
+    key-id: ${NIVAS_PAYMENT_KEY_ID:}
+    key-secret: ${NIVAS_PAYMENT_KEY_SECRET:}
+    # How long an unpaid order keeps its slots off the market.
+    order-ttl: 30m
 
 logging:
   level:

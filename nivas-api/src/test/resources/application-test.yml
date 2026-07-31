@@ -38,6 +38,10 @@ nivas:
   search:
     max-page-size: 100
     default-page-size: 20
+  payments:
+    gateway: mock
+    webhook-secret: integration-test-webhook-secret
+    order-ttl: 5m
   outbox:
     # Faster than production so tests do not spend most of their time waiting
     # for the relay to tick.

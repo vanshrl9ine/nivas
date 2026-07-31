@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.nivas.auth.UserRepository;
 import com.nivas.auth.domain.Role;
 import com.nivas.auth.domain.User;
+import com.nivas.billing.BillingService;
 import com.nivas.catalog.domain.Locality;
 import com.nivas.catalog.domain.Property;
 import com.nivas.catalog.domain.PropertyImage;
@@ -51,13 +52,15 @@ public class PropertyService {
     private final LocalityRepository localityRepository;
     private final UserRepository userRepository;
     private final OutboxRecorder outboxRecorder;
+    private final BillingService billingService;
 
     public PropertyService(PropertyRepository propertyRepository, LocalityRepository localityRepository,
-            UserRepository userRepository, OutboxRecorder outboxRecorder) {
+            UserRepository userRepository, OutboxRecorder outboxRecorder, BillingService billingService) {
         this.propertyRepository = propertyRepository;
         this.localityRepository = localityRepository;
         this.userRepository = userRepository;
         this.outboxRecorder = outboxRecorder;
+        this.billingService = billingService;
     }
 
     // -- reads ---------------------------------------------------------------
@@ -146,8 +149,25 @@ public class PropertyService {
         requireCanManage(property, principal);
 
         if (target == PropertyStatus.ACTIVE) {
+            /*
+             * The quota gate. Checked only when going live, and only when the
+             * listing is not already live — re-publishing something that is
+             * already ACTIVE must not be counted as a second listing.
+             *
+             * Placed before publish() so a seller over quota is told why rather
+             * than being handed a completeness error about a listing that is
+             * perfectly complete.
+             */
+            if (property.getStatus() != PropertyStatus.ACTIVE) {
+                billingService.requireListingCapacity(property.getOwner().getId());
+            }
             // publish() runs the completeness checks; a bare transition would not.
             property.publish();
+
+            // Paid plans carry a verified badge; the free one does not.
+            if (billingService.grantsAutoVerify(property.getOwner().getId()) && !property.isVerified()) {
+                property.verify();
+            }
         } else {
             property.transitionTo(target);
         }

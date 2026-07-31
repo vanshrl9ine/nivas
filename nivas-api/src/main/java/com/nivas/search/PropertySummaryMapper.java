@@ -15,13 +15,13 @@ import com.nivas.search.dto.SearchDtos.PropertySummary;
  * all return the same card. A second copy would drift the moment a field is
  * added, and the symptom would be one surface quietly missing data.
  */
-final class PropertySummaryMapper {
+public final class PropertySummaryMapper {
 
     private PropertySummaryMapper() {
     }
 
     /** For results that carry no distance or relevance score of their own. */
-    static PropertySummary toSummary(PropertyDocument doc) {
+    public static PropertySummary toSummary(PropertyDocument doc) {
         return toSummary(doc, null, null);
     }
 
@@ -32,7 +32,7 @@ final class PropertySummaryMapper {
      * when sorting by distance Elasticsearch has already calculated it, in the
      * unit requested, and recomputing would be both slower and subtly different.
      */
-    static PropertySummary fromHit(SearchHit<PropertyDocument> hit, boolean sortedByDistance) {
+    public static PropertySummary fromHit(SearchHit<PropertyDocument> hit, boolean sortedByDistance) {
         Double distanceKm = null;
 
         if (sortedByDistance && !hit.getSortValues().isEmpty()
