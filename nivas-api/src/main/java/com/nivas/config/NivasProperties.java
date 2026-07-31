@@ -41,7 +41,15 @@ public record NivasProperties(
             @NotNull Duration localityTtl) {
     }
 
-    public record RateLimit(@Valid @NotNull Rule search, @Valid @NotNull Rule lead) {
+    public record RateLimit(
+            @Valid @NotNull Rule search,
+            @Valid @NotNull Rule lead,
+            /*
+             * Type-ahead gets its own bucket. Sharing the search one would mean
+             * typing "koramangala" burns eleven search permits before the user
+             * has even pressed enter.
+             */
+            @Valid @NotNull Rule suggest) {
 
         public record Rule(@Min(1) int permits, @NotNull Duration window) {
         }

@@ -29,7 +29,8 @@ class JwtServiceTest {
                 new NivasProperties.Cache(Duration.ofMinutes(10), Duration.ofSeconds(60), Duration.ofHours(6)),
                 new NivasProperties.RateLimit(
                         new NivasProperties.RateLimit.Rule(60, Duration.ofMinutes(1)),
-                        new NivasProperties.RateLimit.Rule(5, Duration.ofHours(1))),
+                        new NivasProperties.RateLimit.Rule(5, Duration.ofHours(1)),
+                        new NivasProperties.RateLimit.Rule(300, Duration.ofMinutes(1))),
                 new NivasProperties.Search(100, 20));
     }
 

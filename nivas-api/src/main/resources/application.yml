@@ -145,6 +145,11 @@ nivas:
     lead:
       permits: 5
       window: 1h
+    # Fires per keystroke, so the allowance is much larger. Still bounded:
+    # the suggester is cheap but not free.
+    suggest:
+      permits: 300
+      window: 1m
   search:
     # The index name itself lives in PropertyDocument.INDEX_NAME — annotations
     # need a compile-time constant.

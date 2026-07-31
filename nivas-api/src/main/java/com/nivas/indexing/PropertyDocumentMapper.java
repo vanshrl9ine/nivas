@@ -97,17 +97,33 @@ public class PropertyDocumentMapper {
      * it — users do not type titles, they type intent.
      */
     private Completion buildSuggest(Property property) {
-        List<String> inputs = new ArrayList<>(4);
+        List<String> inputs = new ArrayList<>(8);
         inputs.add(property.getTitle());
 
         Locality locality = property.getLocality();
         String area = locality != null ? locality.getName() : property.getCity();
 
         if (area != null) {
+            /*
+             * Area-leading phrasings matter more than they look.
+             *
+             * A completion suggester matches a prefix against the START of each
+             * input, not anywhere inside it. Indexing only "Bright 2 BHK ... in
+             * Koramangala" means someone typing "kora" — which is what people
+             * actually type — matches nothing at all. So the area leads its own
+             * inputs.
+             */
+            inputs.add(area);
             if (property.getBedrooms() != null) {
+                inputs.add(area + " " + property.getBedrooms() + " BHK");
                 inputs.add(property.getBedrooms() + " BHK in " + area);
             }
+            inputs.add(area + " " + humanise(property.getPropertyType().name()).toLowerCase());
             inputs.add(humanise(property.getPropertyType().name()) + " in " + area);
+        }
+
+        if (property.getCity() != null && !property.getCity().equalsIgnoreCase(area)) {
+            inputs.add(property.getCity());
         }
 
         Completion completion = new Completion(inputs.stream()

@@ -24,10 +24,18 @@ import org.springframework.data.elasticsearch.core.suggest.Completion;
  * <p>Three annotations here carry more weight than they look:
  *
  * <ul>
- * <li>{@code versionType = EXTERNAL} — the version below is the listing's JPA
- * version, not an Elasticsearch-managed counter. Elasticsearch will reject a
- * write whose version is not greater than what it already holds, so a
- * re-delivered or out-of-order event cannot resurrect stale data.
+ * <li>{@code versionType = EXTERNAL_GTE} — the version below is the listing's JPA
+ * version, not an Elasticsearch-managed counter. Elasticsearch rejects any write
+ * carrying an <em>older</em> version than it already holds, so a re-delivered or
+ * out-of-order event cannot resurrect stale data.
+ * <p>
+ * GTE rather than EXTERNAL, and the difference is not cosmetic. Plain EXTERNAL
+ * demands a strictly greater version, which makes re-writing a document at its
+ * current version impossible — and that is exactly what a full reindex does.
+ * {@code POST /admin/index/rebuild} failed on every document with "current
+ * version [3] is higher or equal to the one provided [3]", so the recovery path
+ * only ever worked against an empty index. Allowing equality makes redelivery
+ * idempotent instead of fatal, while still rejecting anything genuinely stale.
  * <li>{@code writeTypeHint = FALSE} — Spring Data otherwise writes a {@code _class}
  * field into every document. The mapping is {@code dynamic: strict}, so that
  * field would be rejected on every single index operation.
@@ -40,7 +48,7 @@ import org.springframework.data.elasticsearch.core.suggest.Completion;
 @Document(
         indexName = PropertyDocument.INDEX_NAME,
         createIndex = true,
-        versionType = Document.VersionType.EXTERNAL,
+        versionType = Document.VersionType.EXTERNAL_GTE,
         writeTypeHint = WriteTypeHint.FALSE,
         // Keeps the version in Elasticsearch's own _version metadata instead of
         // copying it into _source. Left at its default, Spring Data writes a

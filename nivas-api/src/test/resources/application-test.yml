@@ -32,6 +32,9 @@ nivas:
     lead:
       permits: 3
       window: 10s
+    suggest:
+      permits: 50
+      window: 10s
   search:
     max-page-size: 100
     default-page-size: 20

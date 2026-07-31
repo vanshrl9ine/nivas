@@ -72,7 +72,7 @@ public class PropertySearchService {
 
         boolean sortedByDistance = request.effectiveSort() == SortOption.DISTANCE && request.hasGeoPoint();
         List<PropertySummary> results = hits.getSearchHits().stream()
-                .map(hit -> toSummary(hit, sortedByDistance))
+                .map(hit -> PropertySummaryMapper.fromHit(hit, sortedByDistance))
                 .toList();
 
         long tookMillis = (System.nanoTime() - startedAt) / 1_000_000;
@@ -83,50 +83,6 @@ public class PropertySearchService {
                 aggregations.facets(),
                 aggregations.priceStats(),
                 tookMillis);
-    }
-
-    // -- hit mapping ---------------------------------------------------------
-
-    private PropertySummary toSummary(SearchHit<PropertyDocument> hit, boolean sortedByDistance) {
-        PropertyDocument doc = hit.getContent();
-
-        // When sorting by distance Elasticsearch has already computed it and
-        // returns it as the first sort value, in the unit we requested (km).
-        // Recomputing it here would be both slower and subtly different.
-        Double distanceKm = null;
-        if (sortedByDistance && !hit.getSortValues().isEmpty()
-                && hit.getSortValues().get(0) instanceof Number distance) {
-            double value = distance.doubleValue();
-            // Documents with no location sort last with a sentinel of +Infinity.
-            distanceKm = Double.isFinite(value)
-                    ? BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue()
-                    : null;
-        }
-
-        Integer area = doc.getCarpetAreaSqft() != null ? doc.getCarpetAreaSqft() : doc.getBuiltUpAreaSqft();
-
-        return new PropertySummary(
-                doc.getId(),
-                doc.getTitle(),
-                doc.getListingType(),
-                doc.getPropertyType(),
-                doc.getPrice(),
-                doc.getPricePerSqft(),
-                doc.getBedrooms(),
-                doc.getBathrooms(),
-                area,
-                doc.getFurnishing(),
-                doc.getLocalityName(),
-                doc.getCity(),
-                doc.getLocation() == null ? null : doc.getLocation().getLat(),
-                doc.getLocation() == null ? null : doc.getLocation().getLon(),
-                doc.getVerified(),
-                doc.getImageCount(),
-                doc.getCoverImageUrl(),
-                doc.getViewCount(),
-                doc.getPublishedAt(),
-                distanceKm,
-                Float.isNaN(hit.getScore()) ? null : (double) hit.getScore());
     }
 
     // -- aggregation parsing -------------------------------------------------
