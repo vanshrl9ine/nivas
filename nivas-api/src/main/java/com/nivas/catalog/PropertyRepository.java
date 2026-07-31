@@ -20,11 +20,21 @@ public interface PropertyRepository extends JpaRepository<Property, UUID> {
     /**
      * Loads a listing with everything the detail page and the indexer need.
      *
-     * <p>The entity graph is what keeps this to a single round trip. Without it,
-     * rendering one listing triggers a select for the owner, another for the
-     * locality, another for the images and another for the amenities.
+     * <p>Only the to-one associations are in the graph. Adding {@code images} and
+     * {@code amenities} as well seems like an obvious win — one round trip
+     * instead of three — and silently returns a Cartesian product: joining two
+     * collections in one query yields |images| × |amenities| rows, and Hibernate
+     * hands back that many duplicated elements. A listing with 4 photos and 4
+     * amenities returned 16 images, each repeated four times.
+     *
+     * <p>That was not merely cosmetic. It multiplied every detail payload, and
+     * the indexer derives {@code imageCount} from the same list, so the "has 3+
+     * photos" relevance boost was scoring against a fabricated number.
+     *
+     * <p>The collections are instead {@code @BatchSize}-annotated on the entity,
+     * so they load in a couple of extra queries rather than N+1 — and correctly.
      */
-    @EntityGraph(attributePaths = { "owner", "locality", "images", "amenities" })
+    @EntityGraph(attributePaths = { "owner", "locality" })
     @Query("SELECT p FROM Property p WHERE p.id = :id")
     Optional<Property> findByIdWithDetail(@Param("id") UUID id);
 
@@ -55,6 +65,7 @@ public interface PropertyRepository extends JpaRepository<Property, UUID> {
 
     long countByOwnerId(UUID ownerId);
 
-    @EntityGraph(attributePaths = { "owner", "locality", "images", "amenities" })
+    /** Same reasoning as {@link #findByIdWithDetail}: to-one only, collections batched. */
+    @EntityGraph(attributePaths = { "owner", "locality" })
     List<Property> findByIdIn(List<UUID> ids);
 }

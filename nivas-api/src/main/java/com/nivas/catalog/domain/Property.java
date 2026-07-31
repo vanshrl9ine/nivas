@@ -12,6 +12,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import org.hibernate.annotations.BatchSize;
+
 import com.nivas.auth.domain.User;
 import com.nivas.common.AuditableEntity;
 import com.nivas.common.exception.BadRequestException;
@@ -152,14 +154,24 @@ public class Property extends AuditableEntity {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /*
+     * Both collections are batch-fetched rather than joined into the same query
+     * as each other. Two collection joins in one select produce a Cartesian
+     * product — see PropertyRepository#findByIdWithDetail. BatchSize keeps that
+     * from becoming N+1 when several listings are loaded at once, as the
+     * reindexer does.
+     */
+
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "property_amenities", joinColumns = @JoinColumn(name = "property_id"))
     @Enumerated(EnumType.STRING)
     @Column(name = "amenity", nullable = false, length = 32)
+    @BatchSize(size = 100)
     private Set<Amenity> amenities = EnumSet.noneOf(Amenity.class);
 
     @OneToMany(mappedBy = "property", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("position ASC")
+    @BatchSize(size = 100)
     private List<PropertyImage> images = new ArrayList<>();
 
     /**

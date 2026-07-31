@@ -27,6 +27,7 @@ import com.nivas.catalog.domain.Locality;
 import com.nivas.catalog.domain.PropertyStatus;
 import com.nivas.catalog.domain.PropertyType;
 import com.nivas.catalog.dto.PropertyDtos.ImagePayload;
+import com.nivas.catalog.dto.PropertyDtos.ImageResponse;
 import com.nivas.catalog.dto.PropertyDtos.PropertyDetailResponse;
 import com.nivas.catalog.dto.PropertyDtos.UpsertPropertyRequest;
 import com.nivas.outbox.OutboxEventRepository;
@@ -92,6 +93,26 @@ class PropertyPipelineIT {
         assertThat(elasticsearch.indexOps(PropertyDocument.class).exists())
                 .as("SearchIndexInitializer should have created the index on startup")
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName("fetching a listing does not multiply its collections")
+    void collectionsAreNotCartesianProducts() {
+        // Three photos and three amenities. Joining both collections in one
+        // query returns 3 x 3 = 9 duplicated images, which inflates every detail
+        // payload and corrupts the imageCount the relevance boost reads.
+        PropertyDetailResponse created = propertyService.create(
+                listingRequest("Listing with a known photo count", new BigDecimal("40000")), owner);
+
+        PropertyDetailResponse fetched = propertyService.getForOwner(created.id(), owner);
+
+        assertThat(fetched.images())
+                .as("one entry per row in property_images, not |images| x |amenities|")
+                .hasSize(3);
+        assertThat(fetched.images()).extracting(ImageResponse::position)
+                .as("positions must be dense and distinct")
+                .containsExactly(0, 1, 2);
+        assertThat(fetched.amenities()).hasSize(3);
     }
 
     @Test

@@ -95,6 +95,23 @@ const POINTS = [
   { lat: 12.9698, lon: 77.75 }, // Whitefield
 ];
 
+/**
+ * Builds a query string.
+ *
+ * k6's JS runtime has no web APIs, so URLSearchParams is not available — it
+ * throws ReferenceError at runtime rather than failing to parse, which means a
+ * script can look perfectly fine until it is actually run under load.
+ *
+ * Takes an array of [key, value] pairs rather than an object so a key can
+ * repeat, which is how list parameters are bound (amenities=A&amenities=B).
+ */
+function qs(pairs) {
+  return pairs
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
@@ -139,10 +156,7 @@ function record(response, trend) {
 export default function (data) {
   group("plain search", () => {
     const response = http.get(
-      `${BASE_URL}/api/v1/search?${new URLSearchParams({
-        q: pick(QUERIES),
-        size: "24",
-      })}`,
+      `${BASE_URL}/api/v1/search?${qs([["q", pick(QUERIES)], ["size", "24"]])}`,
       { tags: { name: "search" } },
     );
     if (!record(response, searchDuration)) {
@@ -157,17 +171,17 @@ export default function (data) {
 
   group("faceted search", () => {
     // The expensive shape: text, several filters, and aggregations over them.
-    const params = new URLSearchParams({
-      q: pick(QUERIES),
-      city: pick(CITIES),
-      listingType: Math.random() < 0.7 ? "RENT" : "SALE",
-      minPrice: "15000",
-      maxPrice: "90000",
-      size: "24",
-    });
-    params.append("bedrooms", "2");
-    params.append("bedrooms", "3");
-    params.append("amenities", pick(AMENITIES));
+    const params = qs([
+      ["q", pick(QUERIES)],
+      ["city", pick(CITIES)],
+      ["listingType", Math.random() < 0.7 ? "RENT" : "SALE"],
+      ["minPrice", "15000"],
+      ["maxPrice", "90000"],
+      ["size", "24"],
+      ["bedrooms", "2"],
+      ["bedrooms", "3"],
+      ["amenities", pick(AMENITIES)],
+    ]);
 
     const response = http.get(`${BASE_URL}/api/v1/search?${params}`, {
       tags: { name: "faceted_search" },
@@ -182,13 +196,13 @@ export default function (data) {
   group("geo search", () => {
     const point = pick(POINTS);
     const response = http.get(
-      `${BASE_URL}/api/v1/search?${new URLSearchParams({
-        lat: String(point.lat),
-        lon: String(point.lon),
-        radiusKm: "5",
-        sort: "DISTANCE",
-        size: "24",
-      })}`,
+      `${BASE_URL}/api/v1/search?${qs([
+        ["lat", String(point.lat)],
+        ["lon", String(point.lon)],
+        ["radiusKm", "5"],
+        ["sort", "DISTANCE"],
+        ["size", "24"],
+      ])}`,
       { tags: { name: "geo_search" } },
     );
     if (!record(response, geoDuration)) {

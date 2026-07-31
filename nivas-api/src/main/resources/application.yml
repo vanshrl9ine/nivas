@@ -79,7 +79,14 @@ spring:
       concurrency: 2
 
   jackson:
-    default-property-inclusion: non_null
+    # Nulls are serialised, not omitted.
+    #
+    # non_null looks tidier and quietly breaks typed clients: a field declared
+    # `number | null` arrives as `undefined` instead, so a `!== null` guard
+    # passes and the UI renders an empty badge. Sending the field explicitly
+    # makes the wire format match the OpenAPI contract and the generated types.
+    # Gzip makes the size difference irrelevant.
+    default-property-inclusion: always
     datatype:
       datetime:
         # Dates go on the wire as ISO-8601, not epoch numbers. In Jackson 3 this
