@@ -142,11 +142,38 @@ while testing nothing.
 
 ## Load testing
 
+Measured on an M-series MacBook with the whole stack — Postgres, Redis,
+Elasticsearch, Kafka and the API — running on the same machine, 36 listings
+indexed. 50 virtual users, 12,093 requests over 4 minutes, **0 failures**.
+
+| Endpoint | median | p95 | p99 | max |
+| --- | --- | --- | --- | --- |
+| Listing detail (cache-aside) | 2.5 ms | 7.2 ms | 18.9 ms | 45.7 ms |
+| Geo radius + distance sort | 8.1 ms | 19.6 ms | 30.3 ms | 46.9 ms |
+| Faceted search (6 aggregations) | 12.1 ms | 27.1 ms | 37.7 ms | 66.8 ms |
+| Plain text search | 13.0 ms | 29.8 ms | 43.2 ms | 78.2 ms |
+
+Two things worth reading off that table. Detail is roughly 4x faster than search
+because it is usually served from Redis rather than Elasticsearch. And plain text
+search is *slower* than faceted search — the filters narrow the candidate set
+before scoring, while an unfiltered fuzzy `multi_match` plus `function_score` has
+to score everything.
+
+A caveat on the numbers: 36 listings fit comfortably in one shard and in page
+cache, so these measure query construction and round trips, not retrieval at
+scale. Treat them as a floor.
+
 ```bash
 brew install k6
 k6 run scripts/load-test.js                 # ramp to 50 VUs
 PROFILE=stress k6 run scripts/load-test.js  # ramp to 300
 ```
+
+Each virtual user presents a distinct `X-Forwarded-For`, as a real proxy would.
+Without that, every VU shares one rate-limit bucket and roughly three quarters of
+requests come back 429 — which costs a Redis call and never reaches
+Elasticsearch, so the run reports a flattering p95 while measuring almost
+nothing. The first version of this script did exactly that.
 
 Seed first — against an empty index every query returns nothing and the numbers
 mean nothing.

@@ -21,6 +21,15 @@ import http from "k6/http";
 import { check, group, sleep } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
+/*
+ * 429 is a correct response, not a failed request.
+ *
+ * Without this k6 counts every rate-limited call as a failure and http_req_failed
+ * reports ~73%, which looks like the API falling over when it is in fact
+ * defending itself.
+ */
+http.setResponseCallback(http.expectedStatuses({ min: 200, max: 299 }, 429));
+
 const BASE_URL = __ENV.BASE_URL || "http://localhost:8080";
 const PROFILE = __ENV.PROFILE || "load";
 
@@ -143,8 +152,26 @@ export function setup() {
   return { ids };
 }
 
+/*
+ * Each virtual user presents as a distinct client.
+ *
+ * The limiter keys anonymous callers by X-Forwarded-For, and a real deployment
+ * sits behind a proxy that sets it per client. Without this every VU shares the
+ * host's single IP and therefore one 60-requests-per-minute bucket, so the run
+ * measures rate-limit rejections — a Redis round trip that never touches
+ * Elasticsearch — rather than search. The first run of this script reported a
+ * flattering p95 of 6ms with 73% of requests rejected.
+ */
+function clientHeaders() {
+  return { "X-Forwarded-For": `10.${__VU % 256}.${(__VU >> 8) % 256}.1` };
+}
+
 function record(response, trend) {
-  trend.add(response.timings.duration);
+  // A rejected request costs one Redis call and no search, so folding it into
+  // the latency trend would quietly flatter every percentile.
+  if (response.status !== 429) {
+    trend.add(response.timings.duration);
+  }
   if (response.status === 429) {
     rateLimited.add(1);
     return true;
@@ -157,7 +184,7 @@ export default function (data) {
   group("plain search", () => {
     const response = http.get(
       `${BASE_URL}/api/v1/search?${qs([["q", pick(QUERIES)], ["size", "24"]])}`,
-      { tags: { name: "search" } },
+      { tags: { name: "search" }, headers: clientHeaders() },
     );
     if (!record(response, searchDuration)) {
       check(response, {
@@ -185,6 +212,7 @@ export default function (data) {
 
     const response = http.get(`${BASE_URL}/api/v1/search?${params}`, {
       tags: { name: "faceted_search" },
+      headers: clientHeaders(),
     });
     if (!record(response, facetedDuration)) {
       check(response, { "faceted 200": (r) => r.status === 200 });
@@ -203,7 +231,7 @@ export default function (data) {
         ["sort", "DISTANCE"],
         ["size", "24"],
       ])}`,
-      { tags: { name: "geo_search" } },
+      { tags: { name: "geo_search" }, headers: clientHeaders() },
     );
     if (!record(response, geoDuration)) {
       check(response, { "geo 200": (r) => r.status === 200 });
@@ -218,6 +246,7 @@ export default function (data) {
     const id = pick(data.ids);
     const response = http.get(`${BASE_URL}/api/v1/properties/${id}`, {
       tags: { name: "detail" },
+      headers: clientHeaders(),
     });
     if (!record(response, detailDuration)) {
       check(response, {
