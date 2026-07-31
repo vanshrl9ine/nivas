@@ -18,9 +18,8 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 import tools.jackson.databind.DefaultTyping;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
 
 @Configuration
 public class RedisConfig {
@@ -36,25 +35,61 @@ public class RedisConfig {
      * cache value has to round-trip back into the exact object it came from.
      */
     @Bean
-    GenericJacksonJsonRedisSerializer cacheValueSerializer() {
-        ObjectMapper mapper = JsonMapper.builder()
-                // Type information is required to deserialise back into the
-                // original type. The validator restricts that to our own packages
-                // so a tampered cache entry cannot name an arbitrary class as a
-                // deserialisation gadget.
-                .activateDefaultTyping(
-                        BasicPolymorphicTypeValidator.builder()
-                                .allowIfBaseType(Object.class)
-                                .allowIfSubType("com.nivas.")
-                                .allowIfSubType("java.util.")
-                                .allowIfSubType("java.time.")
-                                .allowIfSubType("java.math.")
-                                .build(),
-                        DefaultTyping.NON_FINAL,
-                        JsonTypeInfo.As.PROPERTY)
+    public GenericJacksonJsonRedisSerializer cacheValueSerializer() {
+        /*
+         * Restricts polymorphic deserialisation to types we own, so a tampered
+         * cache entry cannot name an arbitrary class as a gadget. Object is
+         * allowed as a base type because cached values are read back as Object.
+         */
+        PolymorphicTypeValidator validator = BasicPolymorphicTypeValidator.builder()
+                .allowIfBaseType(Object.class)
+                .allowIfSubType("com.nivas.")
+                .allowIfSubType("java.util.")
+                .allowIfSubType("java.time.")
+                .allowIfSubType("java.math.")
+                .allowIfSubType("java.lang.")
                 .build();
 
-        return new GenericJacksonJsonRedisSerializer(mapper);
+        /*
+         * enableDefaultTyping on the builder, rather than activateDefaultTyping
+         * on a hand-built mapper.
+         *
+         * Configuring it by hand with DefaultTyping.NON_FINAL looks right and is
+         * quietly broken here: every DTO in this application is a record, records
+         * are final, so no type id was written for them — and nothing could be
+         * read back. The failure only appears on a cache *hit*, so the first
+         * request populates happily and the second one 500s.
+         *
+         * Spring's builder selects a typing strategy that round-trips its own
+         * output, which is the only property that actually matters for a cache.
+         * CacheSerializerRoundTripTest pins it.
+         */
+        return GenericJacksonJsonRedisSerializer.builder()
+                .customize(mapper -> mapper.activateDefaultTyping(
+                        validator,
+                        // NON_FINAL_AND_RECORDS, not NON_FINAL. Records are final, so
+                        // NON_FINAL writes no type id for them and a cached List of
+                        // records cannot be read back. Jackson 3 added this mode for
+                        // precisely this problem.
+                        DefaultTyping.NON_FINAL_AND_RECORDS,
+                        JsonTypeInfo.As.PROPERTY))
+                // Writes with Object as the declared root type.
+                //
+                // Without this the writer and the reader disagree, which is subtle
+                // enough to be worth spelling out. Jackson decides whether to emit a
+                // type id from the *declared* type; the default writer declares the
+                // runtime class, and List.of(...) is ImmutableCollections$ListN —
+                // final, so no type id. The reader always targets Object, which
+                // requires one. Observed directly:
+                //
+                //   wrote: ["Bengaluru","Mumbai"]
+                //   read : Could not resolve type id 'Bengaluru'
+                //
+                // Declaring Object on the way out makes both sides agree. Scalars
+                // hid this in casual testing because Jackson round-trips those
+                // natively without a type id.
+                .writer((mapper, value) -> mapper.writerFor(Object.class).writeValueAsBytes(value))
+                .build();
     }
 
     /**

@@ -83,9 +83,42 @@ class PropertyPipelineIT {
         koramangala = localityRepository.findBySlug("bengaluru-koramangala").orElseThrow(
                 () -> new IllegalStateException("V2 seed migration did not run"));
 
-        if (!elasticsearch.indexOps(PropertyDocument.class).exists()) {
-            elasticsearch.indexOps(PropertyDocument.class).createWithMapping();
-        }
+        // Deliberately does NOT create the index. It used to, and that is exactly
+        // why this suite passed while the real application was broken: nothing in
+        // production created the index, Elasticsearch auto-created it from the
+        // first document with an inferred mapping, and every analyzer and the
+        // geo_point were silently lost. SearchIndexInitializer now owns this, and
+        // the assertion below holds it to that.
+        assertThat(elasticsearch.indexOps(PropertyDocument.class).exists())
+                .as("SearchIndexInitializer should have created the index on startup")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("the index is created with the real mapping, not inferred by Elasticsearch")
+    void indexUsesTheAuthoredMapping() {
+        var mapping = elasticsearch.indexOps(PropertyDocument.class).getMapping();
+
+        assertThat(mapping).isNotNull();
+        @SuppressWarnings("unchecked")
+        var fields = (java.util.Map<String, Object>) mapping.get("properties");
+
+        // An auto-created index infers location as two floats, which silently
+        // breaks every geo query while search still appears to work.
+        assertThat(fields).containsKey("location");
+        @SuppressWarnings("unchecked")
+        var location = (java.util.Map<String, Object>) fields.get("location");
+        assertThat(location.get("type"))
+                .as("must be geo_point — inferred mappings make this an object of floats")
+                .isEqualTo("geo_point");
+
+        @SuppressWarnings("unchecked")
+        var suggest = (java.util.Map<String, Object>) fields.get("suggest");
+        assertThat(suggest.get("type")).isEqualTo("completion");
+
+        assertThat(mapping.get("dynamic"))
+                .as("strict is what stops an unmapped field being indexed with a guessed type")
+                .isEqualTo("strict");
     }
 
     @Test
