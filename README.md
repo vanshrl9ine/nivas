@@ -6,26 +6,28 @@ Postgres is the system of record. Elasticsearch serves search and is kept in ste
 through a **transactional outbox**, so it can always be rebuilt from the database.
 Redis handles caching, distributed rate limiting and view counting.
 
+```mermaid
+flowchart LR
+    WEB["Next.js<br/><i>nivas-web</i>"] -->|REST| API["Spring Boot API"]
+
+    API -->|"write + outbox row<br/><b>one transaction</b>"| PG[("Postgres<br/><b>system of record</b>")]
+    API -->|search| ES[("Elasticsearch<br/><b>derived index</b>")]
+    API -.->|"cache · rate limits · counters"| RD[("Redis")]
+
+    PG -->|"poll SKIP LOCKED"| RELAY["Outbox relay"]
+    RELAY --> KFK{{Kafka}}
+    KFK --> IDX["Indexer"]
+    IDX -->|"re-read truth"| PG
+    IDX -->|"upsert, external version"| ES
+
+    classDef store fill:#e8f0fe,stroke:#4285f4,color:#1a1a1a
+    classDef derived fill:#fef7e0,stroke:#f9ab00,color:#1a1a1a
+    class PG,RD store
+    class ES derived
 ```
-                    ┌──────────────┐
-    HTTP ──────────▶│  Spring Boot │
-                    │     API      │
-                    └──┬────┬───┬──┘
-          write         │    │   │  read (cache-aside, rate limits, counters)
-         ┌──────────────┘    │   └──────────────┐
-         ▼                   │                  ▼
-   ┌───────────┐             │            ┌───────────┐
-   │ Postgres  │             │            │   Redis   │
-   │  (truth)  │             │            └───────────┘
-   └─────┬─────┘             │
-         │ outbox row,       │ search
-         │ same transaction  │
-         ▼                   │
-   ┌───────────┐       ┌─────▼─────────┐
-   │   Relay   │──────▶│ Elasticsearch │
-   │  (poller) │ Kafka │   (derived)   │
-   └───────────┘       └───────────────┘
-```
+
+Sequence diagrams for the write and read paths are in
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Why it is built this way
 
@@ -122,6 +124,24 @@ Integration tests use Testcontainers and exercise the real seams: the full
 write → outbox → Kafka → index → search pipeline, refresh-token rotation, and the
 Lua rate limiter under genuine concurrency. They **skip** rather than fail when no
 Docker daemon is present, so `./mvnw test` still works anywhere.
+
+## Load testing
+
+```bash
+brew install k6
+k6 run scripts/load-test.js                 # ramp to 50 VUs
+PROFILE=stress k6 run scripts/load-test.js  # ramp to 300
+```
+
+Seed first — against an empty index every query returns nothing and the numbers
+mean nothing.
+
+The script separates plain search, faceted search, geo search and listing detail
+into their own metrics rather than reporting one aggregate. They have genuinely
+different cost profiles: a faceted query runs six aggregations, while detail is
+usually served from Redis. A single p95 across both would hide which one is slow.
+Under the stress profile the rate limiter starts returning 429s — that is the
+system working, so those are excluded from the failure rate.
 
 ## API
 
