@@ -122,8 +122,23 @@ which is what keeps `dynamic: strict` from turning a rename into a runtime failu
 
 Integration tests use Testcontainers and exercise the real seams: the full
 write → outbox → Kafka → index → search pipeline, refresh-token rotation, and the
-Lua rate limiter under genuine concurrency. They **skip** rather than fail when no
-Docker daemon is present, so `./mvnw test` still works anywhere.
+Lua rate limiter under genuine concurrency.
+
+They **skip** rather than fail when no Docker daemon is reachable, so `./mvnw test`
+still works anywhere. That convenience has a sharp edge: a skipped suite still
+reports `BUILD SUCCESS`. Set `NIVAS_REQUIRE_DOCKER=true` — as CI does — to turn a
+missing daemon into a failure instead, so a misconfigured runner cannot go green
+while testing nothing.
+
+> **OrbStack / Colima users:** Testcontainers looks for `/var/run/docker.sock`,
+> which neither creates. Without this the whole suite silently skips:
+>
+> ```bash
+> export DOCKER_HOST="unix://$HOME/.orbstack/run/docker.sock"
+> export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+> ```
+>
+> `scripts/env.sh` exports both if it detects OrbStack.
 
 ## Load testing
 

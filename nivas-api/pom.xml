@@ -66,6 +66,20 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
 		</dependency>
+		<!--
+		  Required by spring.data.redis.lettuce.pool.*. The Redis starter does not
+		  pull it in, so enabling pooling without this fails at context refresh
+		  with ClassNotFoundException on GenericObjectPoolConfig.
+
+		  Pooling is worth having here despite Lettuce multiplexing a single
+		  connection: the rate limiter runs Lua via EVALSHA and the cache manager
+		  is transaction-aware, and those hold a connection for the duration
+		  rather than pipelining onto the shared one.
+		-->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-pool2</artifactId>
+		</dependency>
 
 		<!-- messaging -->
 		<dependency>

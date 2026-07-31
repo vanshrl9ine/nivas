@@ -31,6 +31,7 @@ import com.nivas.catalog.dto.PropertyDtos.PropertyDetailResponse;
 import com.nivas.catalog.dto.PropertyDtos.UpsertPropertyRequest;
 import com.nivas.outbox.OutboxEventRepository;
 import com.nivas.outbox.OutboxStatus;
+import com.nivas.outbox.PropertyChangedEvent;
 import com.nivas.search.PropertySearchService;
 import com.nivas.search.SearchRequestBuilder;
 import com.nivas.search.document.PropertyDocument;
@@ -94,8 +95,15 @@ class PropertyPipelineIT {
                 new BigDecimal("42000")), owner);
 
         assertThat(created.status()).isEqualTo(PropertyStatus.DRAFT);
-        // A draft must never reach the index.
-        assertThat(outboxRepository.count()).isZero();
+
+        // A draft must never reach the index. Scoped to this listing, not a
+        // global count: these tests deliberately share a context and do not roll
+        // back — the relay polls committed rows — so earlier tests have left
+        // their own events behind.
+        assertThat(outboxRepository.countByAggregateTypeAndAggregateId(
+                PropertyChangedEvent.AGGREGATE_TYPE, created.id().toString()))
+                .as("creating a draft must not emit an outbox event")
+                .isZero();
 
         propertyService.changeStatus(created.id(), PropertyStatus.PENDING_REVIEW, owner);
         propertyService.changeStatus(created.id(), PropertyStatus.ACTIVE, owner);

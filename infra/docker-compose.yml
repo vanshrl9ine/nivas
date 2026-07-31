@@ -86,7 +86,11 @@ services:
     restart: unless-stopped
 
   kafka:
-    image: apache/kafka:3.9.0
+    # 3.9.1 rather than 3.9.0: the 3.9.0 entrypoint mishandles an unset
+    # advertised.listeners. It happens to work here because the value is set
+    # explicitly below, but pinning the same patch as the tests use avoids
+    # anyone hitting the difference.
+    image: apache/kafka:3.9.1
     container_name: nivas-kafka
     # KRaft mode — single node acting as both broker and controller. No ZooKeeper.
     environment:

@@ -46,7 +46,8 @@ public class Lead extends AuditableEntity {
     @Column(name = "name", nullable = false, length = 120)
     private String name;
 
-    @Column(name = "email", nullable = false)
+    /** citext, so Hibernate needs the explicit definition — see {@link com.nivas.auth.domain.User}. */
+    @Column(name = "email", nullable = false, columnDefinition = "citext")
     private String email;
 
     @Column(name = "phone", nullable = false, length = 20)

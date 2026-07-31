@@ -45,6 +45,32 @@ class PropertyMappingResourceTest {
                 .isEqualTo("strict");
     }
 
+    /**
+     * Both of these are what make {@code dynamic: strict} survivable. Spring Data
+     * otherwise injects two fields of its own into {@code _source} — a
+     * {@code _class} type hint and the {@code version} — and the mapping knows
+     * about neither, so every index write fails.
+     *
+     * <p>Not hypothetical: leaving {@code storeVersionInSource} at its default
+     * broke the entire indexing pipeline, and the failure surfaced only as
+     * listings never appearing in search.
+     */
+    @Test
+    @DisplayName("the document does not let Spring Data inject fields into _source")
+    void documentSuppressesFrameworkFields() {
+        org.springframework.data.elasticsearch.annotations.Document annotation =
+                PropertyDocument.class.getAnnotation(
+                        org.springframework.data.elasticsearch.annotations.Document.class);
+
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.storeVersionInSource())
+                .as("true would add a 'version' field the strict mapping rejects")
+                .isFalse();
+        assertThat(annotation.writeTypeHint())
+                .as("a _class type hint would be rejected the same way")
+                .isEqualTo(org.springframework.data.elasticsearch.annotations.WriteTypeHint.FALSE);
+    }
+
     @Test
     @DisplayName("every persisted document field is present in the mapping")
     void documentFieldsAreAllMapped() {
@@ -55,8 +81,10 @@ class PropertyMappingResourceTest {
             if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
                 continue;
             }
-            // The version is carried in Elasticsearch's own _version metadata,
-            // not as a document field, so it is intentionally unmapped.
+            // Unmapped on purpose — but only legitimate because the document sets
+            // storeVersionInSource = false. That is asserted separately below;
+            // without it Spring Data writes "version" into _source and the strict
+            // mapping rejects every single index operation.
             if (field.getName().equals("version")) {
                 continue;
             }

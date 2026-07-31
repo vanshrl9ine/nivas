@@ -16,7 +16,11 @@ spring:
       pool-name: nivas-cp
       maximum-pool-size: 20
       minimum-idle: 5
-      connection-timeout: 10s
+      # Milliseconds, not a Duration. These bind straight onto HikariConfig's
+      # primitive long fields, so "10s" fails to convert and the context never
+      # starts. Spring's own properties below (spring.data.redis.timeout,
+      # spring.elasticsearch.*) are Durations and do take "2s"/"5s".
+      connection-timeout: 10000
 
   jpa:
     # Off deliberately: lazy loading in the view layer hides N+1 queries and

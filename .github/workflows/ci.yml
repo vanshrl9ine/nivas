@@ -45,10 +45,35 @@ jobs:
         run: ./mvnw -B -ntp test
 
       # Runs the *IT classes against real Postgres, Redis, Elasticsearch and
-      # Kafka containers. The runner has Docker, so nothing is skipped here.
+      # Kafka containers.
+      #
+      # NIVAS_REQUIRE_DOCKER turns an unreachable daemon into a failure instead
+      # of a skip. Without it a misconfigured runner skips all 19 integration
+      # tests and still reports BUILD SUCCESS — which is exactly what happened
+      # the first time this suite was run for real.
       - name: Integration tests
         working-directory: nivas-api
         run: ./mvnw -B -ntp verify
+        env:
+          NIVAS_REQUIRE_DOCKER: "true"
+
+      # Belt and braces: assert the suite actually executed. A future change to
+      # the skip logic should not be able to quietly hollow out CI.
+      - name: Assert integration tests ran
+        working-directory: nivas-api
+        run: |
+          reports=target/failsafe-reports
+          if [ ! -d "$reports" ]; then
+            echo "No failsafe reports — integration tests did not run at all."
+            exit 1
+          fi
+          skipped=$(grep -ho 'skipped="[0-9]*"' "$reports"/*.xml | grep -o '[0-9]*' | paste -sd+ - | bc)
+          run=$(grep -ho 'tests="[0-9]*"' "$reports"/*.xml | grep -o '[0-9]*' | paste -sd+ - | bc)
+          echo "integration tests: $run run, $skipped skipped"
+          if [ "$run" -eq 0 ] || [ "$skipped" -eq "$run" ]; then
+            echo "Every integration test was skipped. Failing."
+            exit 1
+          fi
 
       - name: Package
         working-directory: nivas-api

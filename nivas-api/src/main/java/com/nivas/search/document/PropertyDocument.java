@@ -41,7 +41,12 @@ import org.springframework.data.elasticsearch.core.suggest.Completion;
         indexName = PropertyDocument.INDEX_NAME,
         createIndex = true,
         versionType = Document.VersionType.EXTERNAL,
-        writeTypeHint = WriteTypeHint.FALSE)
+        writeTypeHint = WriteTypeHint.FALSE,
+        // Keeps the version in Elasticsearch's own _version metadata instead of
+        // copying it into _source. Left at its default, Spring Data writes a
+        // "version" field into every document, the strict mapping rejects it, and
+        // *every* index operation fails with strict_dynamic_mapping_exception.
+        storeVersionInSource = false)
 @Setting(settingPath = "elasticsearch/property-settings.json")
 @Mapping(mappingPath = "elasticsearch/property-mapping.json")
 public class PropertyDocument {

@@ -30,7 +30,14 @@ public class TestInfrastructure {
     private static final String REDIS_IMAGE = "redis:7.4-alpine";
     private static final String ELASTICSEARCH_IMAGE =
             "docker.elastic.co/elasticsearch/elasticsearch:9.1.0";
-    private static final String KAFKA_IMAGE = "apache/kafka:3.9.0";
+    /**
+     * 3.9.1, not 3.9.0. The 3.9.0 entrypoint derives {@code advertised.listeners}
+     * from {@code KAFKA_LISTENERS} when the former is unset, and Testcontainers
+     * deliberately leaves it unset until the mapped port is known — so the broker
+     * dies on startup with "advertised.listeners cannot use the nonroutable
+     * meta-address 0.0.0.0". Fixed in 3.9.1.
+     */
+    private static final String KAFKA_IMAGE = "apache/kafka:3.9.1";
 
     @Bean
     @ServiceConnection

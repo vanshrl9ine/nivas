@@ -29,6 +29,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 
     long countByStatus(OutboxStatus status);
 
+    /** Events emitted for one aggregate. Backed by {@code ix_outbox_aggregate}. */
+    long countByAggregateTypeAndAggregateId(String aggregateType, String aggregateId);
+
     /**
      * Housekeeping: published events are kept briefly as an audit trail, then
      * dropped so the table does not grow without bound.

@@ -41,7 +41,7 @@ public class AuthService {
 
     @Transactional
     public TokenResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmailNormalised(request.email())) {
             // The unique index is still the real guard against a concurrent
             // duplicate; this check exists to return a decent message.
             throw new ConflictException("An account with that email already exists");
@@ -74,7 +74,7 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public TokenResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.email().trim())
+        User user = userRepository.findByEmailNormalised(request.email())
                 .orElse(null);
 
         // Always run the encoder, even when the user does not exist, so the

@@ -24,7 +24,7 @@ public class AppUserDetailsService implements UserDetailsService {
     @Override
     @Transactional(readOnly = true)
     public AppUserPrincipal loadUserByUsername(String email) throws UsernameNotFoundException {
-        return userRepository.findByEmail(email)
+        return userRepository.findByEmailNormalised(email)
                 .map(AppUserPrincipal::from)
                 // Same message whether the account is missing or the password is
                 // wrong: distinguishing them turns login into a user enumeration oracle.

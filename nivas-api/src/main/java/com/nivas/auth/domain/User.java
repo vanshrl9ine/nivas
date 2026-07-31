@@ -22,8 +22,18 @@ public class User extends AuditableEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    /** Stored in a citext column, so uniqueness is case-insensitive at the DB level. */
-    @Column(name = "email", nullable = false)
+    /**
+     * Stored in a {@code citext} column, so uniqueness is case-insensitive at the
+     * database level rather than depending on every call site remembering to
+     * lower-case.
+     *
+     * <p>{@code columnDefinition} is required, not decorative: citext reports as
+     * JDBC type {@code OTHER}, while Hibernate expects {@code VARCHAR} for a
+     * String. Without this, {@code ddl-auto: validate} refuses to start the
+     * application at all. Binding still works normally — Postgres casts
+     * varchar to citext implicitly.
+     */
+    @Column(name = "email", nullable = false, columnDefinition = "citext")
     private String email;
 
     @Column(name = "password_hash", nullable = false)
@@ -50,11 +60,24 @@ public class User extends AuditableEntity {
     }
 
     public User(String email, String passwordHash, String fullName, String phone, Role role) {
-        this.email = email;
+        // Normalised here so it is impossible to persist a non-normalised address,
+        // whatever the call site does.
+        this.email = normaliseEmail(email);
         this.passwordHash = passwordHash;
         this.fullName = fullName;
         this.phone = phone;
         this.role = role;
+    }
+
+    /**
+     * Lower-cases and trims an address.
+     *
+     * <p>Locale.ROOT is deliberate: the Turkish locale lower-cases 'I' to a
+     * dotless 'ı', which would make a user's own address stop matching depending
+     * on the server's default locale.
+     */
+    public static String normaliseEmail(String email) {
+        return email == null ? null : email.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     public UUID getId() {

@@ -1,6 +1,7 @@
 package com.nivas.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 
@@ -8,6 +9,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.BindException;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+
+import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -82,5 +88,45 @@ class ApplicationConfigBindingTest {
                 .run(context -> assertThat(context)
                         .as("a short HS256 key must be rejected at startup, not at first login")
                         .hasFailed());
+    }
+
+    /**
+     * Binds the connection-pool block onto the real Hikari type.
+     *
+     * <p>Also written because of a concrete bug. Hikari's timeouts are primitive
+     * {@code long} milliseconds, not Spring {@code Duration}s, so a perfectly
+     * natural-looking {@code connection-timeout: 10s} fails to convert and the
+     * context never starts. Nothing else in the fast suite touched
+     * {@code spring.datasource.*}, so it took a container boot to surface —
+     * which is far too slow a feedback loop for a one-line config typo.
+     *
+     * <p>Constructing a {@code HikariDataSource} does not open a connection, so
+     * this needs no database.
+     */
+    @Test
+    @DisplayName("spring.datasource.hikari binds to Hikari's own primitive types")
+    void hikariPropertiesBind() {
+        runner.run(context -> {
+            HikariDataSource pool = Binder.get(context.getEnvironment())
+                    .bind("spring.datasource.hikari", Bindable.of(HikariDataSource.class))
+                    .orElseThrow(() -> new AssertionError("spring.datasource.hikari did not bind"));
+
+            assertThat(pool.getConnectionTimeout())
+                    .as("milliseconds — a Duration string here would not convert")
+                    .isEqualTo(10_000L);
+            assertThat(pool.getMaximumPoolSize()).isEqualTo(20);
+            assertThat(pool.getMinimumIdle()).isEqualTo(5);
+            assertThat(pool.getPoolName()).isEqualTo("nivas-cp");
+        });
+    }
+
+    @Test
+    @DisplayName("a Duration string in a Hikari millisecond field is rejected")
+    void hikariRejectsDurationStrings() {
+        runner.withPropertyValues("spring.datasource.hikari.connection-timeout=10s")
+                .run(context -> assertThatThrownBy(() -> Binder.get(context.getEnvironment())
+                        .bind("spring.datasource.hikari", Bindable.of(HikariDataSource.class)))
+                        .as("this is the exact shape of the bug this test exists to catch")
+                        .isInstanceOf(BindException.class));
     }
 }
