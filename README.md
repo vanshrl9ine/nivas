@@ -86,8 +86,22 @@ docker compose -f infra/docker-compose.yml --profile observability up -d
 | Prometheus (`--profile observability`) | http://localhost:9090 |
 | Grafana (`--profile observability`) | http://localhost:3001 |
 
-Flyway creates the schema and seeds ~33 localities across six cities on first
+Flyway creates the schema and seeds ~33 localities across eight cities on first
 start, so filters and facets have something to work with immediately.
+
+Then load some listings:
+
+```bash
+python3 scripts/seed-demo.py
+```
+
+It talks to the public API rather than writing to Postgres directly — a direct
+`INSERT` would produce listings that were never published through the state
+machine, so no outbox event is written and nothing reaches the index. Going
+through the API means it doubles as an end-to-end smoke test: it polls search
+until the index catches up, and tells you which hop is stuck if it does not.
+
+It prints demo credentials when it finishes.
 
 ## Testing
 
